@@ -1,0 +1,2236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件管理系统</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- JSZip -->
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js">
+    </script>
+    <style>
+        :root {
+            --sidebar-width: 420px;
+            --node-hover-bg: #f0f4ff;
+            --node-selected-bg: #e3edff;
+            --node-matched-bg: #fffde7;
+            --border-color: #dee2e6;
+            --transition-speed: 0.2s;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
+            background: #f5f6fa;
+            height: 100vh;
+            overflow: hidden;
+            margin: 0;
+        }
+
+        /* ========== 顶部导航栏 ========== */
+        .app-header {
+            background: #ffffff;
+            border-bottom: 1px solid var(--border-color);
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+            z-index: 100;
+            position: relative;
+            flex-shrink: 0;
+        }
+        .app-header .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #3b5de7;
+        }
+        .app-header .logo i {
+            font-size: 1.6rem;
+        }
+        .app-header .user-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            color: #555;
+            background: #f8f9fb;
+            padding: 6px 14px;
+            border-radius: 20px;
+            cursor: default;
+        }
+
+        /* ========== 主布局 ========== */
+        .main-container {
+            display: flex;
+            height: calc(100vh - 56px);
+            overflow: hidden;
+        }
+
+        /* ========== 左侧面板 ========== */
+        .sidebar {
+            width: var(--sidebar-width);
+            min-width: 360px;
+            background: #ffffff;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: width 0.3s ease;
+        }
+        .sidebar-toolbar {
+            padding: 12px 14px;
+            border-bottom: 1px solid #eef0f5;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .sidebar-toolbar .input-group {
+            flex: 1 1 180px;
+            min-width: 140px;
+        }
+        .sidebar-toolbar .input-group .form-control {
+            border-radius: 8px 0 0 8px;
+            font-size: 0.875rem;
+            border-color: #e0e3e8;
+            transition: all var(--transition-speed);
+        }
+        .sidebar-toolbar .input-group .form-control:focus {
+            border-color: #3b5de7;
+            box-shadow: 0 0 0 3px rgba(59, 93, 231, 0.1);
+        }
+        .sidebar-toolbar .input-group .btn {
+            border-radius: 0 8px 8px 0;
+            border-color: #e0e3e8;
+            background: #fafbfc;
+            color: #555;
+        }
+        .sidebar-toolbar .btn {
+            border-radius: 8px;
+            font-size: 0.8rem;
+            padding: 6px 12px;
+            white-space: nowrap;
+            transition: all var(--transition-speed);
+        }
+        .sidebar-toolbar .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+        .btn-batch-download {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+        }
+        .btn-batch-download:hover {
+            background: #c8e6c9;
+            color: #1b5e20;
+        }
+        .btn-batch-delete {
+            background: #fce4ec;
+            color: #c62828;
+            border: 1px solid #f8bbd0;
+        }
+        .btn-batch-delete:hover {
+            background: #f8bbd0;
+            color: #8b0000;
+        }
+        .btn-new-folder {
+            background: #e3f2fd;
+            color: #1565c0;
+            border: 1px solid #bbdefb;
+        }
+        .btn-new-folder:hover {
+            background: #bbdefb;
+            color: #0d3c6e;
+        }
+        /* 全选按钮样式 */
+        .btn-select-all {
+            background: #f3f0ff;
+            color: #5e35b1;
+            border: 1px solid #d1c4e9;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-select-all:hover {
+            background: #d1c4e9;
+            color: #311b92;
+        }
+        .btn-select-all.is-all-selected {
+            background: #ffebee;
+            color: #c62828;
+            border: 1px solid #ef9a9a;
+            animation: pulse-deselect 2s ease-in-out infinite;
+        }
+        .btn-select-all.is-all-selected:hover {
+            background: #ef9a9a;
+            color: #8b0000;
+        }
+        @keyframes pulse-deselect {
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(198, 40, 40, 0.25);
+            }
+            50% {
+                box-shadow: 0 0 0 8px rgba(198, 40, 40, 0);
+            }
+        }
+        .btn-select-all:disabled {
+            opacity: 0.5;
+            pointer-events: none;
+            background: #f5f5f5;
+            color: #aaa;
+            border-color: #e0e0e0;
+        }
+        .batch-info {
+            font-size: 0.75rem;
+            color: #888;
+            flex-basis: 100%;
+            text-align: center;
+            min-height: 18px;
+            line-height: 18px;
+        }
+
+        /* 文件树容器 */
+        .tree-container {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: auto;
+            padding: 8px 4px 20px 8px;
+            scroll-behavior: smooth;
+        }
+        .tree-container::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        .tree-container::-webkit-scrollbar-thumb {
+            background: #d0d5dd;
+            border-radius: 10px;
+        }
+        .tree-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        /* ========== 树节点样式 ========== */
+        .tree-node {
+            user-select: none;
+        }
+        .tree-node .node-row {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 7px 8px 7px 4px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all var(--transition-speed);
+            position: relative;
+            min-height: 38px;
+            margin: 1px 0;
+        }
+        .tree-node .node-row:hover {
+            background: var(--node-hover-bg);
+        }
+        .tree-node .node-row.selected {
+            background: var(--node-selected-bg);
+            outline: 2px solid #b8cdf8;
+            outline-offset: -2px;
+            z-index: 1;
+        }
+        .tree-node .node-row.filter-matched {
+            background: var(--node-matched-bg);
+            outline: 2px solid #ffe082;
+            outline-offset: -2px;
+            z-index: 1;
+            animation: pulse-match 1.5s ease-in-out;
+        }
+        @keyframes pulse-match {
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(255, 183, 77, 0.5);
+            }
+            50% {
+                box-shadow: 0 0 0 10px rgba(255, 183, 77, 0);
+            }
+        }
+
+        /* 缩进 */
+        .node-indent {
+            display: inline-block;
+            flex-shrink: 0;
+        }
+
+        /* 展开箭头 */
+        .expand-arrow {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            border-radius: 5px;
+            flex-shrink: 0;
+            transition: transform 0.25s ease, background 0.2s;
+            font-size: 0.65rem;
+            color: #6b7280;
+            cursor: pointer;
+            background: transparent;
+            border: none;
+            padding: 0;
+        }
+        .expand-arrow:hover {
+            background: #e8ecf2;
+            color: #333;
+        }
+        .expand-arrow.expanded {
+            transform: rotate(90deg);
+        }
+        .expand-arrow.placeholder-arrow {
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        /* 复选框 */
+        .node-checkbox {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+            cursor: pointer;
+            accent-color: #3b5de7;
+            margin: 0 2px;
+        }
+
+        /* 节点图标 */
+        .node-icon {
+            font-size: 1.1rem;
+            flex-shrink: 0;
+            width: 22px;
+            text-align: center;
+        }
+        .node-icon.folder-icon {
+            color: #f0a030;
+        }
+        .node-icon.file-icon {
+            color: #6b8ab5;
+        }
+
+        /* 节点名称 */
+        .node-name {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #1f2937;
+            padding: 2px 4px;
+            border-radius: 4px;
+            transition: color 0.2s;
+        }
+        .node-row:hover .node-name {
+            color: #111;
+        }
+
+        /* 悬停操作按钮组 */
+        .hover-actions {
+            display: flex;
+            gap: 3px;
+            flex-shrink: 0;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+            align-items: center;
+        }
+        .node-row:hover .hover-actions {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .hover-actions .btn-action {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            border: 1px solid transparent;
+            background: #fff;
+            color: #555;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .hover-actions .btn-action:hover {
+            background: #eef1f7;
+            color: #222;
+            border-color: #ccd5e4;
+            transform: scale(1.1);
+        }
+        .hover-actions .btn-action.btn-edit:hover {
+            background: #e3f2fd;
+            color: #1565c0;
+            border-color: #90caf9;
+        }
+        .hover-actions .btn-action.btn-delete:hover {
+            background: #fce4ec;
+            color: #c62828;
+            border-color: #ef9a9a;
+        }
+        .hover-actions .btn-action.btn-add-child:hover {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border-color: #a5d6a7;
+        }
+        .hover-actions .btn-action.btn-upload:hover {
+            background: #fff3e0;
+            color: #e65100;
+            border-color: #ffcc80;
+        }
+        .hover-actions .btn-action.btn-download:hover {
+            background: #e8f5e9;
+            color: #1b5e20;
+            border-color: #81c784;
+        }
+
+        /* 子节点容器 */
+        .node-children {
+            overflow: hidden;
+            transition: max-height 0.35s ease, opacity 0.25s ease;
+        }
+        .node-children.collapsed {
+            max-height: 0 !important;
+            opacity: 0;
+        }
+        .node-children.expanded {
+            max-height: 20000px;
+            opacity: 1;
+        }
+
+        /* ========== 右侧面板 ========== */
+        .detail-panel {
+            flex: 1;
+            background: #fafbfd;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-width: 300px;
+        }
+        .detail-header {
+            padding: 16px 20px;
+            background: #fff;
+            border-bottom: 1px solid #eef0f5;
+            flex-shrink: 0;
+        }
+        .detail-header h5 {
+            margin: 0;
+            font-weight: 600;
+            color: #1f2937;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .detail-header h5 i {
+            font-size: 1.3rem;
+        }
+        .detail-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .detail-body::-webkit-scrollbar {
+            width: 5px;
+        }
+        .detail-body::-webkit-scrollbar-thumb {
+            background: #d0d5dd;
+            border-radius: 10px;
+        }
+
+        /* 信息卡片 */
+        .info-card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
+            border: 1px solid #eef0f5;
+        }
+        .info-card .info-row {
+            display: flex;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #f5f6fa;
+            gap: 12px;
+        }
+        .info-card .info-row:last-child {
+            border-bottom: none;
+        }
+        .info-card .info-label {
+            font-size: 0.8rem;
+            color: #888;
+            width: 70px;
+            flex-shrink: 0;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .info-card .info-value {
+            font-size: 0.9rem;
+            color: #1f2937;
+            font-weight: 500;
+            word-break: break-all;
+        }
+        .info-card .info-value.format-badge {
+            display: inline-block;
+            background: #eef2ff;
+            color: #3b5de7;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        /* 预览区 */
+        .preview-area {
+            flex: 1;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
+            border: 1px solid #eef0f5;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 250px;
+            position: relative;
+        }
+        .preview-area .preview-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            min-height: 350px;
+        }
+        .preview-area .preview-image {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            padding: 10px;
+        }
+        .preview-placeholder {
+            text-align: center;
+            color: #b0b8c4;
+            padding: 40px;
+        }
+        .preview-placeholder i {
+            font-size: 4rem;
+            display: block;
+            margin-bottom: 12px;
+            opacity: 0.6;
+        }
+        .preview-placeholder p {
+            margin: 4px 0;
+            font-size: 0.9rem;
+        }
+        .preview-unsupported {
+            text-align: center;
+            color: #e67e22;
+            padding: 30px;
+            background: #fffaf5;
+            border-radius: 10px;
+        }
+        .preview-unsupported i {
+            font-size: 3rem;
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        /* ========== Modal 样式 ========== */
+        .modal-content {
+            border-radius: 14px;
+            border: none;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+        }
+        .modal-header {
+            border-bottom: 1px solid #eef0f5;
+            padding: 16px 20px;
+        }
+        .modal-footer {
+            border-top: 1px solid #eef0f5;
+            padding: 14px 20px;
+        }
+        .modal-body {
+            padding: 20px;
+        }
+
+        /* ========== Toast ========== */
+        .toast-container {
+            z-index: 9999;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+        }
+
+        /* ========== 响应式 ========== */
+        @media (max-width: 768px) {
+            .main-container {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: 100%;
+                min-width: 100%;
+                max-height: 55%;
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+            }
+            .detail-panel {
+                min-width: 100%;
+                max-height: 45%;
+            }
+            .sidebar-toolbar {
+                gap: 5px;
+            }
+            .sidebar-toolbar .btn {
+                font-size: 0.7rem;
+                padding: 4px 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ==================== 顶部导航栏 ==================== -->
+    <header class="app-header">
+        <div class="logo">
+            <i class="bi bi-folder-symlink"></i>
+            <span>FileHub 文件管理</span>
+        </div>
+        <div class="user-badge">
+            <i class="bi bi-person-circle"></i> 当前用户：管理员
+        </div>
+    </header>
+
+    <!-- ==================== 主布局 ==================== -->
+    <div class="main-container">
+
+        <!-- ========== 左侧面板 ========== -->
+        <aside class="sidebar" id="sidebar">
+            <!-- 工具栏 -->
+            <div class="sidebar-toolbar">
+                <div class="input-group input-group-sm">
+                    <input type="text" class="form-control" id="filterInput"
+                    placeholder="🔍 筛选文件/文件夹..." title="输入关键词筛选节点">
+                    <button class="btn btn-outline-secondary" type="button" id="btnClearFilter"
+                    title="清除筛选">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <button class="btn btn-new-folder btn-sm" id="btnAddRootFolder" title="新建顶层文件夹">
+                <i class="bi bi-folder-plus"></i> 新建文件夹
+            </button>
+            <!-- 全选按钮 -->
+            <button class="btn btn-select-all btn-sm" id="btnSelectAll"
+            title="全选所有节点 / 取消全选" disabled>
+            <i class="bi bi-check2-all"></i> <span id="btnSelectAllText">全选</span>
+        </button>
+        <button class="btn btn-batch-download btn-sm" id="btnBatchDownload"
+        title="打包下载选中的节点" disabled>
+        <i class="bi bi-download"></i> 批量下载
+    </button>
+    <button class="btn btn-batch-delete btn-sm" id="btnBatchDelete"
+    title="批量删除选中的节点" disabled>
+    <i class="bi bi-trash"></i> 批量删除
+</button>
+<span class="batch-info" id="batchInfo">已选 0 个节点</span>
+</div>
+
+<!-- 文件树 -->
+<div class="tree-container" id="treeContainer">
+    <!-- 动态渲染树节点 -->
+</div>
+</aside>
+
+<!-- ========== 右侧面板 ========== -->
+<section class="detail-panel" id="detailPanel">
+    <div class="detail-header">
+        <h5>
+            <i class="bi bi-info-circle-fill" style="color:#3b5de7;"></i>
+            节点详情
+        </h5>
+    </div>
+    <div class="detail-body" id="detailBody">
+        <!-- 默认占位 -->
+        <div class="preview-placeholder" id="detailPlaceholder">
+            <i class="bi bi-hand-index-thumb"></i>
+            <p><strong>请点击左侧文件树中的节点</strong></p>
+            <p>查看文件夹或文件的详细信息</p>
+        </div>
+    </div>
+</section>
+</div>
+
+<!-- ==================== 修改名称 Modal ==================== -->
+<div class="modal fade" id="renameModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title" id="renameModalTitle">修改名称</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <label for="renameInput" class="form-label">请输入新名称</label>
+                <input type="text" class="form-control" id="renameInput" placeholder="输入名称...">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btnConfirmRename">确认修改</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 新建文件夹 Modal ==================== -->
+<div class="modal fade" id="newFolderModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title" id="newFolderModalTitle">新建文件夹</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <label for="newFolderNameInput" class="form-label">文件夹名称</label>
+                <input type="text" class="form-control" id="newFolderNameInput" placeholder="输入文件夹名称...">
+                <input type="hidden" id="newFolderParentId">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btnConfirmNewFolder">确认创建</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 删除确认 Modal ==================== -->
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h6 class="modal-title text-danger">
+                    <i class="bi bi-exclamation-triangle-fill"></i> 确认删除
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <p id="deleteConfirmMsg">确定要删除选中的节点吗？此操作不可恢复。</p>
+                <input type="hidden" id="deleteTargetId">
+                <input type="hidden" id="deleteIsBatch" value="0">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger btn-sm" id="btnConfirmDelete">确认删除</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 隐藏的文件上传 input -->
+<input type="file" id="hiddenFileUpload" multiple style="display:none;"
+accept="*/*">
+<input type="hidden" id="uploadTargetFolderId" value="">
+
+<!-- Toast 容器 -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ==================== Bootstrap 5 JS ==================== -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js">
+</script>
+
+<script>
+    (function() {
+        // ==================== 全局状态 ====================
+        /** @type {Array} 文件树数据 */
+        let fileTreeData = [];
+        /** @type {Set<string>} 已展开的节点ID集合 */
+        let expandedNodes = new Set();
+        /** @type {Set<string>} 已勾选的节点ID集合（用于批量操作） */
+        let checkedNodes = new Set();
+        /** @type {string|null} 当前选中（高亮）的节点ID（右侧面板展示） */
+        let selectedNodeId = null;
+        /** @type {string} 筛选关键词 */
+        let filterKeyword = '';
+        /** @type {Map<string, Blob>} 文件blob存储映射 (nodeId -> Blob) */
+        let fileBlobMap = new Map();
+        /** @type {Map<string, string>} 文件blob URL缓存 (nodeId -> blobUrl) */
+        let blobUrlCache = new Map();
+        /** @type {number} 节点ID自增计数器 */
+        let nodeIdCounter = 0;
+
+        // ==================== DOM引用 ====================
+        const treeContainer = document.getElementById('treeContainer');
+        const detailBody = document.getElementById('detailBody');
+        const detailPlaceholder = document.getElementById('detailPlaceholder');
+        const filterInput = document.getElementById('filterInput');
+        const btnClearFilter = document.getElementById('btnClearFilter');
+        const btnAddRootFolder = document.getElementById('btnAddRootFolder');
+        const btnSelectAll = document.getElementById('btnSelectAll');
+        const btnSelectAllText = document.getElementById('btnSelectAllText');
+        const btnBatchDownload = document.getElementById('btnBatchDownload');
+        const btnBatchDelete = document.getElementById('btnBatchDelete');
+        const batchInfo = document.getElementById('batchInfo');
+        const hiddenFileUpload = document.getElementById('hiddenFileUpload');
+        const uploadTargetFolderId = document.getElementById('uploadTargetFolderId');
+        const toastContainer = document.getElementById('toastContainer');
+
+        // Modal 相关
+        let renameModal, newFolderModal, deleteConfirmModal;
+        const renameInput = document.getElementById('renameInput');
+        const renameModalTitle = document.getElementById('renameModalTitle');
+        const btnConfirmRename = document.getElementById('btnConfirmRename');
+        const newFolderNameInput = document.getElementById('newFolderNameInput');
+        const newFolderParentId = document.getElementById('newFolderParentId');
+        const newFolderModalTitle = document.getElementById('newFolderModalTitle');
+        const btnConfirmNewFolder = document.getElementById('btnConfirmNewFolder');
+        const deleteConfirmMsg = document.getElementById('deleteConfirmMsg');
+        const deleteTargetId = document.getElementById('deleteTargetId');
+        const deleteIsBatch = document.getElementById('deleteIsBatch');
+        const btnConfirmDelete = document.getElementById('btnConfirmDelete');
+
+        /** 当前正在重命名的节点ID */
+        let renameTargetId = null;
+
+        // ==================== 初始化 ====================
+        function init() {
+            // 初始化 Bootstrap Modals
+            renameModal = new bootstrap.Modal(document.getElementById('renameModal'));
+            newFolderModal = new bootstrap.Modal(document.getElementById('newFolderModal'));
+            deleteConfirmModal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+
+            // 初始化演示数据
+            initDemoData();
+
+            // 渲染树
+            renderTree();
+
+            // 绑定事件
+            bindEvents();
+
+            // 更新工具栏按钮状态
+            updateToolbarButtons();
+        }
+
+        // ==================== 演示数据 ====================
+        function initDemoData() {
+            nodeIdCounter = 0;
+            const genId = () => 'node_' + (++nodeIdCounter);
+
+            // 创建模拟文件blob的辅助函数
+            const createMockTextBlob = (content) => new Blob([content], { type: 'text/plain' });
+            const createMockPdfBlob = () => {
+                // 最小有效PDF
+                const pdfContent = `%PDF-1.0
+1 0 obj
+<</Type/Catalog/Pages 2 0 R>>
+endobj
+2 0 obj
+<</Type/Pages/Kids[3 0 R]/Count 1>>
+endobj
+3 0 obj
+<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Resources<<>>>>
+endobj
+xref
+0 4
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+trailer
+<</Size 4/Root 1 0 R>>
+startxref
+206
+%%EOF`;
+                return new Blob([pdfContent], { type: 'application/pdf' });
+            };
+            const createMockJpgBlob = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 1;
+                canvas.height = 1;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#4a90d9';
+                ctx.fillRect(0, 0, 1, 1);
+                return new Promise(resolve => {
+                    canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.9);
+                });
+            };
+
+            const imgBlobPromise = createMockJpgBlob();
+
+            const rootData = [{
+                id: genId(),
+                name: '项目文档',
+                type: 'folder',
+                format: 'folder',
+                size: 0,
+                uploadTime: '2025-12-15 09:30:00',
+                uploader: '张三',
+                children: [{
+                    id: genId(),
+                    name: '需求说明.pdf',
+                    type: 'file',
+                    format: 'pdf',
+                    size: 245760,
+                    uploadTime: '2025-12-15 10:00:00',
+                    uploader: '张三',
+                    children: [],
+                }, {
+                    id: genId(),
+                    name: '架构设计.pdf',
+                    type: 'file',
+                    format: 'pdf',
+                    size: 512000,
+                    uploadTime: '2025-12-16 14:20:00',
+                    uploader: '李四',
+                    children: [],
+                }, {
+                    id: genId(),
+                    name: '界面原型.jpg',
+                    type: 'file',
+                    format: 'jpg',
+                    size: 98304,
+                    uploadTime: '2025-12-17 11:00:00',
+                    uploader: '王五',
+                    children: [],
+                }, {
+                    id: genId(),
+                    name: '开发笔记',
+                    type: 'folder',
+                    format: 'folder',
+                    size: 0,
+                    uploadTime: '2025-12-18 08:00:00',
+                    uploader: '张三',
+                    children: [{
+                        id: genId(),
+                        name: '日报_12月.txt',
+                        type: 'file',
+                        format: 'txt',
+                        size: 4096,
+                        uploadTime: '2025-12-18 18:00:00',
+                        uploader: '张三',
+                        children: [],
+                    }, {
+                        id: genId(),
+                        name: 'API文档.pdf',
+                        type: 'file',
+                        format: 'pdf',
+                        size: 156672,
+                        uploadTime: '2025-12-19 09:00:00',
+                        uploader: '李四',
+                        children: [],
+                    }, ],
+                }, ],
+            }, {
+                id: genId(),
+                name: '设计资源',
+                type: 'folder',
+                format: 'folder',
+                size: 0,
+                uploadTime: '2025-11-01 16:00:00',
+                uploader: '设计部',
+                children: [{
+                    id: genId(),
+                    name: 'logo方案A.jpg',
+                    type: 'file',
+                    format: 'jpg',
+                    size: 204800,
+                    uploadTime: '2025-11-05 10:30:00',
+                    uploader: '设计师A',
+                    children: [],
+                }, {
+                    id: genId(),
+                    name: '配色方案.txt',
+                    type: 'file',
+                    format: 'txt',
+                    size: 2048,
+                    uploadTime: '2025-11-06 15:00:00',
+                    uploader: '设计师B',
+                    children: [],
+                }, ],
+            }, {
+                id: genId(),
+                name: '测试报告',
+                type: 'folder',
+                format: 'folder',
+                size: 0,
+                uploadTime: '2026-01-10 09:00:00',
+                uploader: '测试组',
+                children: [{
+                    id: genId(),
+                    name: 'v1.2测试结果.pdf',
+                    type: 'file',
+                    format: 'pdf',
+                    size: 389120,
+                    uploadTime: '2026-01-15 17:00:00',
+                    uploader: '测试员A',
+                    children: [],
+                }, ],
+            }, ];
+
+            fileTreeData = rootData;
+
+            // 为模拟文件创建blob
+            const allNodes = flattenAllNodes(rootData);
+            allNodes.forEach(node => {
+                if (node.type === 'file') {
+                    if (node.format === 'pdf') {
+                        fileBlobMap.set(node.id, createMockPdfBlob());
+                    } else if (node.format === 'txt') {
+                        fileBlobMap.set(node.id, createMockTextBlob(
+                            `这是模拟文件: ${node.name}\n上传时间: ${node.uploadTime}\n上传人: ${node.uploader}\n文件大小: ${formatFileSize(node.size)}\n`
+                            ));
+                    }
+                }
+            });
+
+            // 异步设置jpg blob
+            imgBlobPromise.then(jpgBlob => {
+                allNodes.forEach(node => {
+                    if (node.type === 'file' && (node.format === 'jpg' || node.format ===
+                            'jpeg')) {
+                        fileBlobMap.set(node.id, jpgBlob);
+                    }
+                });
+            });
+
+            // 默认展开根节点
+            fileTreeData.forEach(node => {
+                if (node.type === 'folder') {
+                    expandedNodes.add(node.id);
+                }
+            });
+        }
+
+        /** 扁平化所有节点 */
+        function flattenAllNodes(nodes) {
+            let result = [];
+            nodes.forEach(node => {
+                result.push(node);
+                if (node.children && node.children.length > 0) {
+                    result = result.concat(flattenAllNodes(node.children));
+                }
+            });
+            return result;
+        }
+
+        /** 获取所有节点的总数 */
+        function getAllNodesCount() {
+            return flattenAllNodes(fileTreeData).length;
+        }
+
+        /** 判断当前是否已全选所有节点 */
+        function isAllNodesSelected() {
+            const allNodes = flattenAllNodes(fileTreeData);
+            if (allNodes.length === 0) return false;
+            return allNodes.every(node => checkedNodes.has(node.id));
+        }
+
+        // ==================== 工具函数 ====================
+        function generateId() {
+            return 'node_' + (++nodeIdCounter);
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            const size = (bytes / Math.pow(k, i)).toFixed(i === 0 ? 0 : 1);
+            return size + ' ' + sizes[i];
+        }
+
+        function getNowTimeString() {
+            const now = new Date();
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ` +
+                `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+        }
+
+        function getFileIconClass(format) {
+            const map = {
+                'pdf': 'bi-file-pdf-fill',
+                'jpg': 'bi-file-image-fill',
+                'jpeg': 'bi-file-image-fill',
+                'png': 'bi-file-image-fill',
+                'gif': 'bi-file-image-fill',
+                'txt': 'bi-file-text-fill',
+                'doc': 'bi-file-word-fill',
+                'docx': 'bi-file-word-fill',
+                'xls': 'bi-file-excel-fill',
+                'xlsx': 'bi-file-excel-fill',
+                'ppt': 'bi-file-ppt-fill',
+                'pptx': 'bi-file-ppt-fill',
+                'zip': 'bi-file-zip-fill',
+                'rar': 'bi-file-zip-fill',
+                'mp4': 'bi-file-play-fill',
+                'mp3': 'bi-file-music-fill',
+            };
+            return map[format.toLowerCase()] || 'bi-file-earmark-fill';
+        }
+
+        function getFileIconColor(format) {
+            const map = {
+                'pdf': '#e74c3c',
+                'jpg': '#4a90d9',
+                'jpeg': '#4a90d9',
+                'png': '#4a90d9',
+                'gif': '#4a90d9',
+                'txt': '#6b8ab5',
+                'doc': '#2b7cd3',
+                'docx': '#2b7cd3',
+                'xls': '#27ae60',
+                'xlsx': '#27ae60',
+            };
+            return map[format.toLowerCase()] || '#6b8ab5';
+        }
+
+        /** 递归查找节点 */
+        function findNodeById(nodes, id) {
+            for (const node of nodes) {
+                if (node.id === id) return node;
+                if (node.children && node.children.length > 0) {
+                    const found = findNodeById(node.children, id);
+                    if (found) return found;
+                }
+            }
+            return null;
+        }
+
+        /** 查找父节点 */
+        function findParentNode(nodes, childId, parent = null) {
+            for (const node of nodes) {
+                if (node.id === childId) return parent;
+                if (node.children && node.children.length > 0) {
+                    const found = findParentNode(node.children, childId, node);
+                    if (found !== undefined) return found;
+                }
+            }
+            return undefined;
+        }
+
+        /** 递归计算文件夹大小 */
+        function calculateFolderSize(node) {
+            if (node.type === 'file') return node.size;
+            if (!node.children || node.children.length === 0) return 0;
+            return node.children.reduce((sum, child) => sum + calculateFolderSize(child), 0);
+        }
+
+        /** 收集节点及其所有子文件（用于ZIP打包） */
+        function collectAllFiles(node, pathPrefix = '') {
+            const files = [];
+            const currentPath = pathPrefix ? pathPrefix + '/' + node.name : node.name;
+            if (node.type === 'file') {
+                files.push({ node, path: currentPath });
+            } else if (node.type === 'folder' && node.children) {
+                node.children.forEach(child => {
+                    files.push(...collectAllFiles(child, currentPath));
+                });
+            }
+            return files;
+        }
+
+        /** 收集勾选节点中的所有文件（去重） */
+        function collectCheckedFiles() {
+            const allFilePaths = new Map();
+            checkedNodes.forEach(nodeId => {
+                const node = findNodeById(fileTreeData, nodeId);
+                if (!node) return;
+                const collected = collectAllFiles(node);
+                collected.forEach(({ node: fileNode, path }) => {
+                    if (!allFilePaths.has(path)) {
+                        allFilePaths.set(path, fileNode);
+                    }
+                });
+            });
+            return Array.from(allFilePaths.entries()).map(([path, node]) => ({ path, node }));
+        }
+
+        // ==================== Blob URL 管理 ====================
+        function getBlobUrl(nodeId) {
+            if (blobUrlCache.has(nodeId)) {
+                return blobUrlCache.get(nodeId);
+            }
+            const blob = fileBlobMap.get(nodeId);
+            if (blob) {
+                const url = URL.createObjectURL(blob);
+                blobUrlCache.set(nodeId, url);
+                return url;
+            }
+            return null;
+        }
+
+        function revokeBlobUrl(nodeId) {
+            if (blobUrlCache.has(nodeId)) {
+                URL.revokeObjectURL(blobUrlCache.get(nodeId));
+                blobUrlCache.delete(nodeId);
+            }
+        }
+
+        // ==================== Toast 通知 ====================
+        function showToast(message, type = 'success') {
+            const toastId = 'toast_' + Date.now();
+            const bgClass = type === 'success' ? 'bg-success' :
+                type === 'error' ? 'bg-danger' :
+                type === 'warning' ? 'bg-warning text-dark' : 'bg-info';
+            const icon = type === 'success' ? 'bi-check-circle-fill' :
+                type === 'error' ? 'bi-x-circle-fill' :
+                type === 'warning' ? 'bi-exclamation-triangle-fill' : 'bi-info-circle-fill';
+
+            const toastHTML = `
+                <div id="${toastId}" class="toast align-items-center ${bgClass} text-white border-0 shadow-sm"
+                     role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex">
+                        <div class="toast-body d-flex align-items-center gap-2">
+                            <i class="bi ${icon}"></i> ${message}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto"
+                                data-bs-dismiss="toast" aria-label="关闭"></button>
+                    </div>
+                </div>`;
+            toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+            const toastEl = document.getElementById(toastId);
+            const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
+            toast.show();
+            toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+        }
+
+        // ==================== 全选功能 ====================
+        function toggleSelectAll() {
+            if (isAllNodesSelected()) {
+                // 当前已全选 → 取消全选
+                checkedNodes.clear();
+                renderTree();
+                updateToolbarButtons();
+                showToast('已取消全选', 'info');
+            } else {
+                // 未全选 → 全选所有节点
+                const allNodes = flattenAllNodes(fileTreeData);
+                allNodes.forEach(node => checkedNodes.add(node.id));
+                renderTree();
+                updateToolbarButtons();
+                showToast(`已全选 ${allNodes.length} 个节点`, 'success');
+            }
+        }
+
+        // ==================== 渲染文件树 ====================
+        function renderTree() {
+            treeContainer.innerHTML = '';
+            fileTreeData.forEach(node => {
+                treeContainer.appendChild(createTreeNodeElement(node, 0));
+            });
+        }
+
+        function createTreeNodeElement(node, depth) {
+            const nodeDiv = document.createElement('div');
+            nodeDiv.className = 'tree-node';
+            nodeDiv.setAttribute('data-node-id', node.id);
+            nodeDiv.setAttribute('data-depth', depth);
+
+            // 节点行
+            const rowDiv = document.createElement('div');
+            rowDiv.className = 'node-row';
+            if (node.id === selectedNodeId) {
+                rowDiv.classList.add('selected');
+            }
+            if (filterKeyword && doesNodeMatchFilter(node)) {
+                rowDiv.classList.add('filter-matched');
+            }
+            rowDiv.setAttribute('data-node-id', node.id);
+
+            // 缩进
+            const indentSpan = document.createElement('span');
+            indentSpan.className = 'node-indent';
+            indentSpan.style.width = (depth * 22) + 'px';
+            rowDiv.appendChild(indentSpan);
+
+            // 展开箭头（仅文件夹显示）
+            const arrowBtn = document.createElement('button');
+            arrowBtn.className = 'expand-arrow';
+            arrowBtn.setAttribute('data-node-id', node.id);
+            if (node.type === 'folder') {
+                arrowBtn.innerHTML = '<i class="bi bi-chevron-right"></i>';
+                if (expandedNodes.has(node.id)) {
+                    arrowBtn.classList.add('expanded');
+                }
+                arrowBtn.title = expandedNodes.has(node.id) ? '折叠' : '展开';
+            } else {
+                arrowBtn.classList.add('placeholder-arrow');
+                arrowBtn.innerHTML = '<i class="bi bi-chevron-right" style="opacity:0;"></i>';
+                arrowBtn.style.pointerEvents = 'none';
+            }
+            rowDiv.appendChild(arrowBtn);
+
+            // 复选框
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'node-checkbox';
+            checkbox.setAttribute('data-node-id', node.id);
+            checkbox.checked = checkedNodes.has(node.id);
+            if (node.type === 'folder' && !checkedNodes.has(node.id) && hasSomeCheckedDescendants(node)) {
+                checkbox.indeterminate = true;
+            }
+            rowDiv.appendChild(checkbox);
+
+            // 节点图标
+            const iconSpan = document.createElement('span');
+            iconSpan.className = 'node-icon';
+            if (node.type === 'folder') {
+                iconSpan.classList.add('folder-icon');
+                iconSpan.innerHTML = expandedNodes.has(node.id) ?
+                    '<i class="bi bi-folder2-open"></i>' : '<i class="bi bi-folder"></i>';
+            } else {
+                iconSpan.classList.add('file-icon');
+                iconSpan.style.color = getFileIconColor(node.format);
+                iconSpan.innerHTML = `<i class="bi ${getFileIconClass(node.format)}"></i>`;
+            }
+            rowDiv.appendChild(iconSpan);
+
+            // 节点名称
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'node-name';
+            nameSpan.textContent = node.name;
+            nameSpan.title = node.name;
+            rowDiv.appendChild(nameSpan);
+
+            // 悬停操作按钮
+            const actionsDiv = document.createElement('span');
+            actionsDiv.className = 'hover-actions';
+            if (node.type === 'folder') {
+                actionsDiv.innerHTML = `
+                    <button class="btn-action btn-edit" data-action="edit" data-node-id="${node.id}"
+                            title="修改文件夹名称">
+                        <i class="bi bi-pencil-square"></i>
+                    </button>
+                    <button class="btn-action btn-add-child" data-action="addChildFolder" data-node-id="${node.id}"
+                            title="新建子文件夹">
+                        <i class="bi bi-folder-plus"></i>
+                    </button>
+                    <button class="btn-action btn-upload" data-action="uploadFile" data-node-id="${node.id}"
+                            title="上传文件到此处">
+                        <i class="bi bi-upload"></i>
+                    </button>
+                    <button class="btn-action btn-delete" data-action="delete" data-node-id="${node.id}"
+                            title="删除文件夹">
+                        <i class="bi bi-trash3"></i>
+                    </button>
+                `;
+            } else {
+                actionsDiv.innerHTML = `
+                    <button class="btn-action btn-edit" data-action="edit" data-node-id="${node.id}"
+                            title="修改文件名称">
+                        <i class="bi bi-pencil-square"></i>
+                    </button>
+                    <button class="btn-action btn-download" data-action="download" data-node-id="${node.id}"
+                            title="下载文件">
+                        <i class="bi bi-download"></i>
+                    </button>
+                    <button class="btn-action btn-delete" data-action="delete" data-node-id="${node.id}"
+                            title="删除文件">
+                        <i class="bi bi-trash3"></i>
+                    </button>
+                `;
+            }
+            rowDiv.appendChild(actionsDiv);
+
+            nodeDiv.appendChild(rowDiv);
+
+            // 子节点容器
+            if (node.type === 'folder' && node.children) {
+                const childrenDiv = document.createElement('div');
+                childrenDiv.className = 'node-children';
+                if (expandedNodes.has(node.id)) {
+                    childrenDiv.classList.add('expanded');
+                } else {
+                    childrenDiv.classList.add('collapsed');
+                }
+                childrenDiv.setAttribute('data-parent-id', node.id);
+                node.children.forEach(child => {
+                    childrenDiv.appendChild(createTreeNodeElement(child, depth + 1));
+                });
+                nodeDiv.appendChild(childrenDiv);
+            }
+
+            return nodeDiv;
+        }
+
+        function doesNodeMatchFilter(node) {
+            if (!filterKeyword) return false;
+            const kw = filterKeyword.toLowerCase();
+            return node.name.toLowerCase().includes(kw);
+        }
+
+        function hasSomeCheckedDescendants(node) {
+            if (!node.children || node.children.length === 0) return false;
+            for (const child of node.children) {
+                if (checkedNodes.has(child.id)) return true;
+                if (child.type === 'folder' && hasSomeCheckedDescendants(child)) return true;
+            }
+            return false;
+        }
+
+        function areAllDescendantsChecked(node) {
+            if (!node.children || node.children.length === 0) return true;
+            for (const child of node.children) {
+                if (child.type === 'file' && !checkedNodes.has(child.id)) return false;
+                if (child.type === 'folder') {
+                    if (!checkedNodes.has(child.id) && !areAllDescendantsChecked(child)) return false;
+                    if (!areAllDescendantsChecked(child)) return false;
+                }
+            }
+            return true;
+        }
+
+        function hasDescendantMatchingFilter(node) {
+            if (!filterKeyword) return false;
+            if (doesNodeMatchFilter(node)) return true;
+            if (!node.children || node.children.length === 0) return false;
+            for (const child of node.children) {
+                if (hasDescendantMatchingFilter(child)) return true;
+            }
+            return false;
+        }
+
+        // ==================== 局部刷新树 ====================
+        function refreshTreeNode(nodeId) {
+            const existingEl = treeContainer.querySelector(`.tree-node > .node-row[data-node-id="${nodeId}"]`)
+                ?.parentElement;
+            if (!existingEl) {
+                renderTree();
+                return;
+            }
+            const node = findNodeById(fileTreeData, nodeId);
+            if (!node) {
+                renderTree();
+                return;
+            }
+            const depth = parseInt(existingEl.getAttribute('data-depth')) || 0;
+            const newEl = createTreeNodeElement(node, depth);
+            existingEl.replaceWith(newEl);
+        }
+
+        function refreshTreeAfterStructuralChange() {
+            renderTree();
+            updateToolbarButtons();
+        }
+
+        // ==================== 展开/折叠 ====================
+        function toggleExpand(nodeId) {
+            const node = findNodeById(fileTreeData, nodeId);
+            if (!node || node.type !== 'folder') return;
+
+            if (expandedNodes.has(nodeId)) {
+                expandedNodes.delete(nodeId);
+            } else {
+                expandedNodes.add(nodeId);
+            }
+
+            const nodeEl = treeContainer.querySelector(`.tree-node > .node-row[data-node-id="${nodeId}"]`)
+                ?.parentElement;
+            if (nodeEl) {
+                const childrenDiv = nodeEl.querySelector(':scope > .node-children');
+                const arrowBtn = nodeEl.querySelector(':scope > .node-row > .expand-arrow');
+                const iconSpan = nodeEl.querySelector(':scope > .node-row > .node-icon');
+                if (childrenDiv) {
+                    if (expandedNodes.has(nodeId)) {
+                        childrenDiv.classList.remove('collapsed');
+                        childrenDiv.classList.add('expanded');
+                        if (arrowBtn) arrowBtn.classList.add('expanded');
+                        if (iconSpan && node.type === 'folder') {
+                            iconSpan.innerHTML = '<i class="bi bi-folder2-open"></i>';
+                        }
+                    } else {
+                        childrenDiv.classList.remove('expanded');
+                        childrenDiv.classList.add('collapsed');
+                        if (arrowBtn) arrowBtn.classList.remove('expanded');
+                        if (iconSpan && node.type === 'folder') {
+                            iconSpan.innerHTML = '<i class="bi bi-folder"></i>';
+                        }
+                    }
+                }
+                if (arrowBtn) {
+                    arrowBtn.title = expandedNodes.has(nodeId) ? '折叠' : '展开';
+                }
+            } else {
+                renderTree();
+            }
+        }
+
+        // ==================== 选中节点（右侧面板） ====================
+        function selectNode(nodeId) {
+            if (selectedNodeId) {
+                const prevEl = treeContainer.querySelector(
+                    `.node-row[data-node-id="${selectedNodeId}"]`);
+                if (prevEl) prevEl.classList.remove('selected');
+            }
+            selectedNodeId = nodeId;
+            const newEl = treeContainer.querySelector(`.node-row[data-node-id="${nodeId}"]`);
+            if (newEl) newEl.classList.add('selected');
+            updateDetailPanel(nodeId);
+        }
+
+        // ==================== 右侧详情面板 ====================
+        function updateDetailPanel(nodeId) {
+            const node = findNodeById(fileTreeData, nodeId);
+            if (!node) {
+                detailBody.innerHTML = `
+                    <div class="preview-placeholder">
+                        <i class="bi bi-hand-index-thumb"></i>
+                        <p><strong>请点击左侧文件树中的节点</strong></p>
+                        <p>查看文件夹或文件的详细信息</p>
+                    </div>`;
+                return;
+            }
+
+            const displaySize = node.type === 'folder' ? calculateFolderSize(node) : node.size;
+            const formatDisplay = node.type === 'folder' ? '文件夹' : (node.format || '未知').toUpperCase();
+
+            let previewHTML = '';
+            if (node.type === 'file') {
+                const blobUrl = getBlobUrl(node.id);
+                const formatLower = (node.format || '').toLowerCase();
+                if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(formatLower) && blobUrl) {
+                    previewHTML = `
+                        <div class="preview-area">
+                            <img src="${blobUrl}" alt="${node.name}" class="preview-image"
+                                 onerror="this.parentElement.innerHTML='<div class=\\'preview-unsupported\\'><i class=\\'bi bi-exclamation-circle\\'></i><p>图片加载失败</p></div>'">
+                        </div>`;
+                } else if (formatLower === 'pdf' && blobUrl) {
+                    previewHTML = `
+                        <div class="preview-area">
+                            <iframe src="${blobUrl}" class="preview-iframe"
+                                    title="PDF预览"></iframe>
+                        </div>`;
+                } else if (blobUrl && ['txt', 'md', 'json', 'xml', 'csv', 'log'].includes(formatLower)) {
+                    previewHTML = `
+                        <div class="preview-area" id="textPreviewArea" style="padding:16px;overflow:auto;">
+                            <pre style="white-space:pre-wrap;word-break:break-all;font-size:0.85rem;"
+                                 id="textPreviewContent">加载中...</pre>
+                        </div>`;
+                    setTimeout(async () => {
+                        try {
+                            const blob = fileBlobMap.get(node.id);
+                            if (blob) {
+                                const text = await blob.text();
+                                const textEl = document.getElementById('textPreviewContent');
+                                if (textEl) textEl.textContent = text;
+                            }
+                        } catch (e) {
+                            const textEl = document.getElementById('textPreviewContent');
+                            if (textEl) textEl.textContent = '无法读取文件内容';
+                        }
+                    }, 50);
+                } else {
+                    previewHTML = `
+                        <div class="preview-area">
+                            <div class="preview-unsupported">
+                                <i class="bi bi-file-earmark-x"></i>
+                                <p><strong>暂不支持预览此格式</strong></p>
+                                <p>格式：${formatDisplay}</p>
+                                <p class="text-muted small">支持预览的格式：PDF、JPG、PNG、GIF、TXT</p>
+                            </div>
+                        </div>`;
+                }
+            } else {
+                const childCount = node.children ? node.children.length : 0;
+                const fileCount = node.children ?
+                    node.children.filter(c => c.type === 'file').length : 0;
+                const folderCount = node.children ?
+                    node.children.filter(c => c.type === 'folder').length : 0;
+                previewHTML = `
+                    <div class="preview-area">
+                        <div class="preview-placeholder">
+                            <i class="bi bi-folder-fill" style="color:#f0a030;"></i>
+                            <p><strong>${node.name}</strong></p>
+                            <p>包含 ${fileCount} 个文件，${folderCount} 个子文件夹</p>
+                            <p class="text-muted small">共 ${childCount} 个项目</p>
+                        </div>
+                    </div>`;
+            }
+
+            detailBody.innerHTML = `
+                <div class="info-card">
+                    <div class="info-row">
+                        <span class="info-label">名称</span>
+                        <span class="info-value">${escapeHTML(node.name)}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">类型</span>
+                        <span class="info-value format-badge">${formatDisplay}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">大小</span>
+                        <span class="info-value">${formatFileSize(displaySize)}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">上传时间</span>
+                        <span class="info-value">${node.uploadTime || '未知'}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">上传人</span>
+                        <span class="info-value">${node.uploader || '未知'}</span>
+                    </div>
+                </div>
+                ${previewHTML}
+            `;
+        }
+
+        function escapeHTML(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        // ==================== 复选框逻辑 ====================
+        function setCheckedRecursive(node, checked) {
+            if (checked) {
+                checkedNodes.add(node.id);
+            } else {
+                checkedNodes.delete(node.id);
+            }
+            if (node.children && node.children.length > 0) {
+                node.children.forEach(child => setCheckedRecursive(child, checked));
+            }
+        }
+
+        function updateParentCheckState(nodeId) {
+            const parent = findParentNode(fileTreeData, nodeId);
+            if (!parent) return;
+
+            const allChecked = areAllDescendantsChecked(parent);
+            const someChecked = hasSomeCheckedDescendants(parent);
+
+            if (allChecked) {
+                checkedNodes.add(parent.id);
+            } else if (!someChecked) {
+                checkedNodes.delete(parent.id);
+            }
+
+            updateCheckboxDOM(parent.id);
+            updateParentCheckState(parent.id);
+        }
+
+        function updateCheckboxDOM(nodeId) {
+            const checkbox = treeContainer.querySelector(`.node-checkbox[data-node-id="${nodeId}"]`);
+            if (!checkbox) return;
+            const node = findNodeById(fileTreeData, nodeId);
+            checkbox.checked = checkedNodes.has(nodeId);
+            if (node && node.type === 'folder' && !checkedNodes.has(nodeId) && hasSomeCheckedDescendants(node)) {
+                checkbox.indeterminate = true;
+            } else {
+                checkbox.indeterminate = false;
+            }
+        }
+
+        function handleCheckboxChange(nodeId, checked) {
+            const node = findNodeById(fileTreeData, nodeId);
+            if (!node) return;
+
+            setCheckedRecursive(node, checked);
+            updateParentCheckState(nodeId);
+            renderTree();
+            updateToolbarButtons();
+        }
+
+        // ==================== 工具栏按钮状态 ====================
+        function updateToolbarButtons() {
+            const count = checkedNodes.size;
+            const totalNodes = getAllNodesCount();
+            const allSelected = isAllNodesSelected();
+
+            // 更新选中信息
+            if (allSelected && totalNodes > 0) {
+                batchInfo.textContent = `已全选 ${totalNodes} 个节点`;
+            } else if (count > 0) {
+                batchInfo.textContent = `已选 ${count} 个节点`;
+            } else {
+                batchInfo.textContent = '已选 0 个节点';
+            }
+
+            // 更新批量下载/删除按钮
+            if (count > 0) {
+                btnBatchDownload.disabled = false;
+                btnBatchDelete.disabled = false;
+            } else {
+                btnBatchDownload.disabled = true;
+                btnBatchDelete.disabled = true;
+            }
+
+            // 更新全选按钮
+            if (totalNodes === 0) {
+                btnSelectAll.disabled = true;
+                btnSelectAll.classList.remove('is-all-selected');
+                btnSelectAllText.textContent = '全选';
+            } else {
+                btnSelectAll.disabled = false;
+                if (allSelected) {
+                    btnSelectAll.classList.add('is-all-selected');
+                    btnSelectAllText.textContent = '取消全选';
+                    btnSelectAll.querySelector('i').className = 'bi bi-x-circle-fill';
+                    btnSelectAll.title = '取消全选所有节点';
+                } else {
+                    btnSelectAll.classList.remove('is-all-selected');
+                    btnSelectAllText.textContent = '全选';
+                    btnSelectAll.querySelector('i').className = 'bi bi-check2-all';
+                    btnSelectAll.title = '全选所有节点';
+                }
+            }
+        }
+
+        // ==================== 批量操作 ====================
+        function batchDownload() {
+            if (checkedNodes.size === 0) {
+                showToast('请先勾选要下载的节点', 'warning');
+                return;
+            }
+            const fileEntries = collectCheckedFiles();
+            if (fileEntries.length === 0) {
+                showToast('选中的节点中没有可下载的文件', 'warning');
+                return;
+            }
+
+            const zip = new JSZip();
+            const addedPaths = new Set();
+
+            fileEntries.forEach(({ path, node }) => {
+                if (addedPaths.has(path)) return;
+                addedPaths.add(path);
+                const blob = fileBlobMap.get(node.id);
+                if (blob) {
+                    zip.file(path, blob);
+                } else {
+                    zip.file(path, `[模拟文件] ${node.name}\n大小: ${formatFileSize(node.size)}\n`);
+                }
+            });
+
+            zip.generateAsync({ type: 'blob' }).then(zipBlob => {
+                const url = URL.createObjectURL(zipBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `批量下载_${new Date().toISOString().slice(0,10)}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast(`成功打包下载 ${fileEntries.length} 个文件`, 'success');
+            }).catch(err => {
+                console.error('ZIP生成失败:', err);
+                showToast('打包下载失败，请重试', 'error');
+            });
+        }
+
+        function batchDelete() {
+            if (checkedNodes.size === 0) {
+                showToast('请先勾选要删除的节点', 'warning');
+                return;
+            }
+            deleteIsBatch.value = '1';
+            deleteTargetId.value = '';
+            deleteConfirmMsg.textContent =
+                `确定要删除已选中的 ${checkedNodes.size} 个节点吗？此操作不可恢复，所有子节点也将被一并删除。`;
+            deleteConfirmModal.show();
+        }
+
+        function executeBatchDelete() {
+            const idsToDelete = new Set(checkedNodes);
+            idsToDelete.forEach(nodeId => {
+                deleteNodeFromTree(nodeId);
+            });
+            checkedNodes.clear();
+            if (selectedNodeId && !findNodeById(fileTreeData, selectedNodeId)) {
+                selectedNodeId = null;
+                detailBody.innerHTML = `
+                    <div class="preview-placeholder">
+                        <i class="bi bi-hand-index-thumb"></i>
+                        <p><strong>请点击左侧文件树中的节点</strong></p>
+                        <p>查看文件夹或文件的详细信息</p>
+                    </div>`;
+            }
+            refreshTreeAfterStructuralChange();
+            updateToolbarButtons();
+            showToast('批量删除完成', 'success');
+        }
+
+        function deleteNodeFromTree(nodeId) {
+            const node = findNodeById(fileTreeData, nodeId);
+            if (node) {
+                const allNodes = flattenAllNodes([node]);
+                allNodes.forEach(n => {
+                    revokeBlobUrl(n.id);
+                    fileBlobMap.delete(n.id);
+                    expandedNodes.delete(n.id);
+                    checkedNodes.delete(n.id);
+                });
+            }
+            removeNodeFromData(fileTreeData, nodeId);
+        }
+
+        function removeNodeFromData(nodes, nodeId) {
+            for (let i = nodes.length - 1; i >= 0; i--) {
+                if (nodes[i].id === nodeId) {
+                    nodes.splice(i, 1);
+                    return true;
+                }
+                if (nodes[i].children && nodes[i].children.length > 0) {
+                    if (removeNodeFromData(nodes[i].children, nodeId)) return true;
+                }
+            }
+            return false;
+        }
+
+        // ==================== 筛选功能 ====================
+        function applyFilter() {
+            filterKeyword = filterInput.value.trim();
+            if (filterKeyword) {
+                autoExpandForFilter();
+            }
+            renderTree();
+            if (selectedNodeId) {
+                const el = treeContainer.querySelector(`.node-row[data-node-id="${selectedNodeId}"]`);
+                if (el) el.classList.add('selected');
+            }
+            updateToolbarButtons();
+        }
+
+        function autoExpandForFilter() {
+            if (!filterKeyword) return;
+            const allNodes = flattenAllNodes(fileTreeData);
+            allNodes.forEach(node => {
+                if (doesNodeMatchFilter(node)) {
+                    let parent = findParentNode(fileTreeData, node.id);
+                    while (parent) {
+                        expandedNodes.add(parent.id);
+                        parent = findParentNode(fileTreeData, parent.id);
+                    }
+                }
+            });
+            fileTreeData.forEach(node => {
+                if (node.type === 'folder' && hasDescendantMatchingFilter(node)) {
+                    expandedNodes.add(node.id);
+                }
+            });
+        }
+
+        function clearFilter() {
+            filterInput.value = '';
+            filterKeyword = '';
+            renderTree();
+            if (selectedNodeId) {
+                const el = treeContainer.querySelector(`.node-row[data-node-id="${selectedNodeId}"]`);
+                if (el) el.classList.add('selected');
+            }
+            updateToolbarButtons();
+            filterInput.focus();
+        }
+
+        // ==================== 节点操作 ====================
+        function openRenameModal(nodeId) {
+            const node = findNodeById(fileTreeData, nodeId);
+            if (!node) return;
+            renameTargetId = nodeId;
+            renameModalTitle.textContent = node.type === 'folder' ? '修改文件夹名称' : '修改文件名称';
+            renameInput.value = node.name;
+            renameModal.show();
+            setTimeout(() => renameInput.focus(), 300);
+        }
+
+        function confirmRename() {
+            const newName = renameInput.value.trim();
+            if (!newName) {
+                showToast('名称不能为空', 'warning');
+                return;
+            }
+            if (!renameTargetId) return;
+            const node = findNodeById(fileTreeData, renameTargetId);
+            if (!node) return;
+
+            const parent = findParentNode(fileTreeData, renameTargetId);
+            const siblings = parent ? parent.children : fileTreeData;
+            const hasDuplicate = siblings.some(s => s.id !== renameTargetId && s.name === newName);
+            if (hasDuplicate) {
+                showToast('同级已存在相同名称的节点，请使用其他名称', 'warning');
+                return;
+            }
+
+            node.name = newName;
+            renameModal.hide();
+            refreshTreeAfterStructuralChange();
+            if (selectedNodeId === renameTargetId) {
+                updateDetailPanel(renameTargetId);
+            }
+            showToast('名称修改成功', 'success');
+            renameTargetId = null;
+        }
+
+        function openNewFolderModal(parentId) {
+            newFolderParentId.value = parentId || '';
+            newFolderNameInput.value = '';
+            if (parentId) {
+                const parentNode = findNodeById(fileTreeData, parentId);
+                newFolderModalTitle.textContent =
+                    `在「${parentNode ? parentNode.name : '...'}」下新建文件夹`;
+            } else {
+                newFolderModalTitle.textContent = '新建顶层文件夹';
+            }
+            newFolderModal.show();
+            setTimeout(() => newFolderNameInput.focus(), 300);
+        }
+
+        function confirmNewFolder() {
+            const folderName = newFolderNameInput.value.trim();
+            if (!folderName) {
+                showToast('文件夹名称不能为空', 'warning');
+                return;
+            }
+            const parentId = newFolderParentId.value;
+            const newNode = {
+                id: generateId(),
+                name: folderName,
+                type: 'folder',
+                format: 'folder',
+                size: 0,
+                uploadTime: getNowTimeString(),
+                uploader: '管理员',
+                children: [],
+            };
+
+            if (parentId) {
+                const parentNode = findNodeById(fileTreeData, parentId);
+                if (parentNode) {
+                    if (!parentNode.children) parentNode.children = [];
+                    if (parentNode.children.some(c => c.name === folderName && c.type === 'folder')) {
+                        showToast('该文件夹下已存在同名文件夹', 'warning');
+                        return;
+                    }
+                    parentNode.children.push(newNode);
+                    expandedNodes.add(parentId);
+                }
+            } else {
+                if (fileTreeData.some(n => n.name === folderName && n.type === 'folder')) {
+                    showToast('顶层已存在同名文件夹', 'warning');
+                    return;
+                }
+                fileTreeData.push(newNode);
+                expandedNodes.add(newNode.id);
+            }
+
+            newFolderModal.hide();
+            refreshTreeAfterStructuralChange();
+            showToast('文件夹创建成功', 'success');
+        }
+
+        function openDeleteConfirm(nodeId) {
+            deleteIsBatch.value = '0';
+            deleteTargetId.value = nodeId;
+            const node = findNodeById(fileTreeData, nodeId);
+            const nodeName = node ? node.name : '未知';
+            deleteConfirmMsg.textContent =
+                `确定要删除「${nodeName}」吗？${node && node.type === 'folder' ? '其内部所有子节点也将被一并删除。' : ''}此操作不可恢复。`;
+            deleteConfirmModal.show();
+        }
+
+        function confirmDelete() {
+            if (deleteIsBatch.value === '1') {
+                executeBatchDelete();
+                deleteConfirmModal.hide();
+                return;
+            }
+            const nodeId = deleteTargetId.value;
+            if (!nodeId) {
+                deleteConfirmModal.hide();
+                return;
+            }
+            const node = findNodeById(fileTreeData, nodeId);
+            if (node) {
+                const allNodes = flattenAllNodes([node]);
+                allNodes.forEach(n => {
+                    revokeBlobUrl(n.id);
+                    fileBlobMap.delete(n.id);
+                    expandedNodes.delete(n.id);
+                    checkedNodes.delete(n.id);
+                });
+            }
+            removeNodeFromData(fileTreeData, nodeId);
+            checkedNodes.delete(nodeId);
+            if (selectedNodeId === nodeId) {
+                selectedNodeId = null;
+                detailBody.innerHTML = `
+                    <div class="preview-placeholder">
+                        <i class="bi bi-hand-index-thumb"></i>
+                        <p><strong>请点击左侧文件树中的节点</strong></p>
+                        <p>查看文件夹或文件的详细信息</p>
+                    </div>`;
+            }
+            deleteConfirmModal.hide();
+            refreshTreeAfterStructuralChange();
+            updateToolbarButtons();
+            showToast('删除成功', 'success');
+        }
+
+        function downloadFile(nodeId) {
+            const node = findNodeById(fileTreeData, nodeId);
+            if (!node || node.type !== 'file') return;
+            const blobUrl = getBlobUrl(node.id);
+            if (blobUrl) {
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = node.name;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                showToast(`正在下载: ${node.name}`, 'success');
+            } else {
+                const content = `[模拟文件] ${node.name}\n上传时间: ${node.uploadTime}\n大小: ${formatFileSize(node.size)}\n`;
+                const blob = new Blob([content], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = node.name.replace(/\.[^.]+$/, '') + '.txt';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast(`正在下载(模拟): ${node.name}`, 'success');
+            }
+        }
+
+        function triggerUploadFile(folderId) {
+            uploadTargetFolderId.value = folderId;
+            hiddenFileUpload.value = '';
+            hiddenFileUpload.click();
+        }
+
+        function handleFileUpload(event) {
+            const files = event.target.files;
+            if (!files || files.length === 0) return;
+            const folderId = uploadTargetFolderId.value;
+            const targetFolder = folderId ? findNodeById(fileTreeData, folderId) : null;
+            const targetArray = targetFolder ? (targetFolder.children || (targetFolder.children = [])) :
+                fileTreeData;
+
+            Array.from(files).forEach(file => {
+                const ext = file.name.lastIndexOf('.') > 0 ?
+                    file.name.substring(file.name.lastIndexOf('.') + 1).toLowerCase() : '未知';
+                const newNode = {
+                    id: generateId(),
+                    name: file.name,
+                    type: 'file',
+                    format: ext,
+                    size: file.size,
+                    uploadTime: getNowTimeString(),
+                    uploader: '管理员',
+                    children: [],
+                };
+                fileBlobMap.set(newNode.id, file);
+                const existingIndex = targetArray.findIndex(n => n.name === file.name && n.type ===
+                    'file');
+                if (existingIndex >= 0) {
+                    const oldNode = targetArray[existingIndex];
+                    revokeBlobUrl(oldNode.id);
+                    fileBlobMap.delete(oldNode.id);
+                    checkedNodes.delete(oldNode.id);
+                    if (selectedNodeId === oldNode.id) selectedNodeId = null;
+                    targetArray[existingIndex] = newNode;
+                } else {
+                    targetArray.push(newNode);
+                }
+            });
+
+            if (folderId) {
+                expandedNodes.add(folderId);
+            }
+            refreshTreeAfterStructuralChange();
+            showToast(`成功上传 ${files.length} 个文件`, 'success');
+            hiddenFileUpload.value = '';
+        }
+
+        // ==================== 事件绑定 ====================
+        function bindEvents() {
+            // 文件树容器事件委托
+            treeContainer.addEventListener('click', function(e) {
+                const target = e.target;
+                const rowEl = target.closest('.node-row');
+                const nodeId = rowEl ? rowEl.getAttribute('data-node-id') : null;
+
+                // 点击展开箭头
+                const arrowBtn = target.closest('.expand-arrow');
+                if (arrowBtn && nodeId) {
+                    e.stopPropagation();
+                    toggleExpand(nodeId);
+                    return;
+                }
+
+                // 点击复选框
+                const checkbox = target.closest('.node-checkbox');
+                if (checkbox && nodeId) {
+                    e.stopPropagation();
+                    handleCheckboxChange(nodeId, checkbox.checked);
+                    return;
+                }
+
+                // 点击操作按钮
+                const actionBtn = target.closest('.btn-action');
+                if (actionBtn && nodeId) {
+                    e.stopPropagation();
+                    const action = actionBtn.getAttribute('data-action');
+                    handleActionClick(action, nodeId);
+                    return;
+                }
+
+                // 点击节点行（选中节点）
+                if (rowEl && nodeId) {
+                    e.stopPropagation();
+                    selectNode(nodeId);
+                    return;
+                }
+            });
+
+            // 全选按钮
+            btnSelectAll.addEventListener('click', function(e) {
+                e.stopPropagation();
+                toggleSelectAll();
+            });
+
+            // 筛选输入
+            let filterDebounceTimer;
+            filterInput.addEventListener('input', function() {
+                clearTimeout(filterDebounceTimer);
+                filterDebounceTimer = setTimeout(() => {
+                    applyFilter();
+                }, 300);
+            });
+            filterInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    clearTimeout(filterDebounceTimer);
+                    applyFilter();
+                }
+                if (e.key === 'Escape') {
+                    clearFilter();
+                }
+            });
+            btnClearFilter.addEventListener('click', clearFilter);
+
+            // 新建顶层文件夹
+            btnAddRootFolder.addEventListener('click', function() {
+                openNewFolderModal('');
+            });
+
+            // 批量下载
+            btnBatchDownload.addEventListener('click', batchDownload);
+
+            // 批量删除
+            btnBatchDelete.addEventListener('click', batchDelete);
+
+            // 修改名称确认
+            btnConfirmRename.addEventListener('click', confirmRename);
+            renameInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') confirmRename();
+            });
+
+            // 新建文件夹确认
+            btnConfirmNewFolder.addEventListener('click', confirmNewFolder);
+            newFolderNameInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') confirmNewFolder();
+            });
+
+            // 删除确认
+            btnConfirmDelete.addEventListener('click', confirmDelete);
+
+            // 文件上传处理
+            hiddenFileUpload.addEventListener('change', handleFileUpload);
+
+            // 键盘快捷键
+            document.addEventListener('keydown', function(e) {
+                // Ctrl+A 全选（当焦点不在输入框时）
+                if (e.ctrlKey && e.key === 'a' && document.activeElement === document.body) {
+                    e.preventDefault();
+                    toggleSelectAll();
+                }
+                // Ctrl+Shift+A 取消全选
+                if (e.ctrlKey && e.shiftKey && e.key === 'A' && document.activeElement === document.body) {
+                    e.preventDefault();
+                    if (checkedNodes.size > 0) {
+                        checkedNodes.clear();
+                        renderTree();
+                        updateToolbarButtons();
+                        showToast('已取消全选', 'info');
+                    }
+                }
+                // Delete键删除选中节点
+                if (e.key === 'Delete' && selectedNodeId && document.activeElement === document.body) {
+                    e.preventDefault();
+                    openDeleteConfirm(selectedNodeId);
+                }
+            });
+        }
+
+        function handleActionClick(action, nodeId) {
+            switch (action) {
+                case 'edit':
+                    openRenameModal(nodeId);
+                    break;
+                case 'delete':
+                    openDeleteConfirm(nodeId);
+                    break;
+                case 'addChildFolder':
+                    openNewFolderModal(nodeId);
+                    break;
+                case 'uploadFile':
+                    triggerUploadFile(nodeId);
+                    break;
+                case 'download':
+                    downloadFile(nodeId);
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        // ==================== 窗口大小调整 ====================
+        function handleResize() {
+            const sidebar = document.getElementById('sidebar');
+            if (window.innerWidth < 768) {
+                sidebar.style.width = '100%';
+                sidebar.style.minWidth = '100%';
+            } else {
+                sidebar.style.width = 'var(--sidebar-width)';
+                sidebar.style.minWidth = '360px';
+            }
+        }
+
+        window.addEventListener('resize', handleResize);
+
+        // ==================== 启动应用 ====================
+        init();
+        handleResize();
+
+        console.log('📁 FileHub 文件管理系统已就绪');
+        console.log('  - 点击节点查看详情');
+        console.log('  - 悬停节点显示操作按钮');
+        console.log('  - 勾选节点进行批量操作');
+        console.log('  - 工具栏【全选】按钮一键全选/取消全选');
+        console.log('  - Ctrl+A 全选 | Ctrl+Shift+A 取消全选');
+        console.log('  - Delete 键删除选中节点');
+        console.log('  - 支持 PDF/JPG/TXT 在线预览');
+        console.log('  - 批量下载打包为ZIP');
+    })();
+</script>
+</body>
+</html>
